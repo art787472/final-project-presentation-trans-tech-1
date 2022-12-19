@@ -1,40 +1,462 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
 
-		<title>reveal.js</title>
+    <title>期末報告</title>
 
-		<link rel="stylesheet" href="dist/reset.css">
-		<link rel="stylesheet" href="dist/reveal.css">
-		<link rel="stylesheet" href="dist/theme/black.css">
+    <link rel="stylesheet" href="dist/reset.css" />
+    <link rel="stylesheet" href="dist/reveal.css" />
+    <link rel="stylesheet" href="dist/theme/black.css" />
 
-		<!-- Theme used for syntax highlighted code -->
-		<link rel="stylesheet" href="plugin/highlight/monokai.css">
-	</head>
-	<body>
-		<div class="reveal">
-			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
-			</div>
-		</div>
+    <!-- Theme used for syntax highlighted code -->
+    <link rel="stylesheet" href="plugin/highlight/monokai.css" />
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <section>
+          <h1>期末報告</h1>
+          <h2>Project Syndicate 語料庫建構</h2>
+          <h3>陳毅澂</h3>
+        </section>
+        <section data-markdown>
+          <textarea data-template>
+						## Project Syndicate
+						 - 上報[《大家論壇》](https://www.upmedia.mg/news_list.php?Type=130)
+						 - Choose the topic of "Asia"
+						 - 2022/12/16:831 articles
+						---
+						## Web scrapping
+						 1. create a list of all aritcles
+						 2. scrap the Chinese articles
+						 3. scrap the Source aritcles
+						 4. paragraphs alignment
+  				</textarea
+          >
+        </section>
+        <section>
+          <pre><code data-trim data-line-numbers="1-10|12-16|18-19|35-36|39-50" class="python">
+import requests
+from bs4 import BeautifulSoup
+import time
+import random
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import pathlib
+from datetime import datetime
+import sqlite3
+from urllib.parse import urlparse, parse_qs
 
-		<script src="dist/reveal.js"></script>
-		<script src="plugin/notes/notes.js"></script>
-		<script src="plugin/markdown/markdown.js"></script>
-		<script src="plugin/highlight/highlight.js"></script>
-		<script>
-			// More info about initialization & config:
-			// - https://revealjs.com/initialization/
-			// - https://revealjs.com/config/
-			Reveal.initialize({
-				hash: true,
+class Article:
+    def __init__(self, link, pub_time, title):
+        self.link = link
+        self.pub_time = pub_time
+        self.title = title
 
-				// Learn about plugins: https://revealjs.com/plugins/
-				plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
-			});
-		</script>
-	</body>
+root_url = 'https://www.upmedia.mg/'
+url = 'https://www.upmedia.mg/news_list.php?currentPage=1&Type=133'
+HEADERS ={
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "zh-TW,zh;q=0.9",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36" #使用者代理
+}
+HEADER = {'User-Agent': 'Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'}
+PAGE= 10
+
+links = []
+
+conn = sqlite3.connect('article.db')
+cursor = conn.cursor()
+# iterating through all page
+
+for page_num in range(PAGE):
+    time.sleep(random.randrange(15))
+    response = requests.get(f'https://www.upmedia.mg/news_list.php?currentPage={page_num + 11}&Type=133', headers=HEADERS)
+    # if response.status_code != 200: raise Exception('Unsuccessful request')
+    soup = BeautifulSoup(response.text, 'html.parser')
+    cards = soup.select('.top-dl')
+    for card in cards:
+        link = card.select('dd a:nth-child(2)')
+
+        pub_time = card.select('.time')
+        title = link[0].text
+        links.append(Article(link=root_url + link[0].get('href').replace('Type=133&', ''), pub_time=pub_time[0].text, title=title.strip()))
+
+					</code></pre>
+        </section>
+        <section>
+          <h2>Selenium</h2>
+          <h3>Web automatic tool</h3>
+          <ul>
+            <li>web application test</li>
+            <li>web scrapping (SPA and other dynamically loading content)</li>
+          </ul>
+          <h3>Why?</h3>
+          <h3>demo: 爛台大</h3>
+        </section>
+        <section>
+          <pre><code data-trim data-line-numbers="1-10|12-16|18-19|21-24|25|26-27|28-29|30-33|35-36|39-50" class="python">
+options = Options()
+options.headless = True
+driver = webdriver.Chrome(options=options, executable_path='./chromedriver.exe')
+
+path = pathlib.Path.cwd()
+datetime_format = '%Y-%m-%dT%H:%M:%S'
+
+insert_query = 'INSERT INTO articles (zhTitle, enTitle,  articleId, pubdate)   VALUES(?, ?, ?, ?);'
+
+for link in links:
+    try:
+        print(link.link)
+
+        driver.get(link.link)
+        time.sleep(5)
+        pub_date = driver.find_elements_by_name('pubdate')[0].get_attribute('content')
+        pub_datetime = datetime.strptime(pub_date, datetime_format)
+        article_id = parse_qs(urlparse(link.link).query).get('SerialNo')[0]
+        print(article_id)
+
+        save_path = pathlib.Path.cwd()
+        save_path = save_path / str(pub_datetime.year) / str(pub_datetime.month) / str(pub_datetime.day)
+        print(save_path)
+        save_path.mkdir(0o755, parents=True, exist_ok=True)
+        html = driver.find_elements_by_class_name('editor')[0].get_attribute("innerHTML")
+        cursor.execute(insert_query, (link.title, 'placeholder', article_id, pub_datetime.strftime("%Y-%m-%d")))
+        conn.commit()
+        with open(save_path / f'{link.title}.html', 'w', encoding="utf-8") as file:
+            file.write(html)
+    except Exception:
+        print(Exception)
+        print(f"{link.title} {article_id} 錯誤")
+        continue
+
+conn.close()
+					</code></pre>
+        </section>
+        <section>
+          <pre><code data-trim data-line-numbers="1-3|5|6|7-14|16-17" class="python" >
+import sqlite3
+
+conn = sqlite3.connect('article.db')
+
+cursor = conn.cursor()
+cursor.execute('DROP TABLE IF EXISTS articles;')
+cursor.execute('CREATE TABLE IF NOT EXISTS articles'
+               '(id INTEGER PRIMARY KEY AUTOINCREMENT,'
+               'zhTitle TEXT NOT NULL,'
+                'enTitle TEXT,'
+               'articleId TEXT NOT NULL,'
+                'pubdate TEXT NOT NULL,'
+               'isScrped INTEGER);'
+               )
+
+conn.commit()
+conn.close()
+					</code></pre>
+        </section>
+
+        <section>
+          <section>
+            <h1>Bypass the paywall</h1>
+            <ul>
+              <li>With the paywall only 3 paragraphs can be accessed</li>
+              <li><a href="https://12ft.io/">12 feet</a></li>
+            </ul>
+          </section>
+          <section>
+            <h3>How does it work?</h3>
+            <p>
+              The idea is pretty simple, news sites want Google to index their
+              content so it shows up in search results. So they don't show a
+              paywall to the Google crawler. We benefit from this because the
+              Google crawler will cache a copy of the site every time it crawls
+              it.
+            </p>
+            <ul>
+              <li>legal issue</li>
+              <li>no 100% guarantee (about 20%)</li>
+            </ul>
+          </section>
+        </section>
+
+        <section>
+          <pre><code data-trim data-line-numbers="1-3|14-15|6,16-17|18|24,21-22|25|8,26|27|28-29|30-33|35" class="python" >
+options = Options()
+options.headless = True
+driver = webdriver.Chrome(options=options, executable_path='./chromedriver.exe')
+
+
+datetime_format = '%Y-%m-%dT%H:%M:%S'
+
+insert_query = 'INSERT INTO articles (zhTitle, enTitle,  articleId, pubdate)   VALUES(?, ?, ?, ?);'
+
+for link in links:
+    try:
+        print(link.link)
+
+        driver.get(link.link)
+        time.sleep(5)
+        pub_date = driver.find_elements_by_name('pubdate')[0].get_attribute('content')
+        pub_datetime = datetime.strptime(pub_date, datetime_format)
+        article_id = parse_qs(urlparse(link.link).query).get('SerialNo')[0]
+        print(article_id)
+
+        save_path = pathlib.Path.cwd()
+        save_path = save_path / str(pub_datetime.year) / str(pub_datetime.month) / str(pub_datetime.day)
+        print(save_path)
+        save_path.mkdir(0o755, parents=True, exist_ok=True)
+        html = driver.find_elements_by_class_name('editor')[0].get_attribute("innerHTML")
+        cursor.execute(insert_query, (link.title, 'placeholder', article_id, pub_datetime.strftime("%Y-%m-%d")))
+        conn.commit()
+        with open(save_path / f'{link.title}.html', 'w', encoding="utf-8") as file:
+            file.write(html)
+    except Exception as err:
+        print(str(err))
+        print(f"{link.title} {article_id} 錯誤")
+        continue
+
+conn.close()
+					</code></pre>
+        </section>
+        <section>
+          <pre><code data-trim data-line-numbers="1-10|23-24|25|28-36|39|43-51" class="python" >
+import pathlib
+from bs4 import BeautifulSoup
+import re
+from selenium import webdriver
+from bs4 import BeautifulSoup
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+import time
+import sqlite3
+import random
+
+conn = sqlite3.connect('article.db')
+
+cursor = conn.cursor()
+links = []
+update_query = '''
+UPDATE articles
+SET enTitle=?,
+sourceLink=?
+WHERE zhTitle=?
+'''
+
+path = (pathlib.Path.cwd() / '2019').glob('**/*')
+files = [x for x in path if x.is_file()]
+for html in files:
+with open(html, 'r', encoding='utf-8') as file:
+    try:
+        code = file.read()
+        soup = BeautifulSoup(code, 'html.parser')
+        original_ele = soup.find_all(lambda tag: '原標題' in tag.text)[0]
+        link_ele = original_ele.select('a')
+        print(link_ele)
+        for ele in link_ele:
+            if len(ele.text) >= 4:
+                title = ele.text
+                en_link = ele.get('href')
+
+
+        cursor.execute(update_query, (title, en_link, html.stem))
+        print(title)
+        print(en_link)
+        conn.commit()
+        cur = cursor.execute(f"SELECT articleId from articles WHERE zhTitle='{html.stem}';")
+        rows = cur.fetchall()
+
+        article_id = rows[0][0]
+        links.append({
+            'title': title,
+            'en_link': en_link,
+            'article_id': article_id
+        })
+    except:
+        continue
+					</code></pre>
+        </section>
+        <section>
+          <pre><code data-trim data-line-numbers="1-3|5|6|8-9|10-11|12|13-16|17-22|23|24-27|29" class="python" >
+options = Options()
+options.headless = True
+driver = webdriver.Chrome(options=options, executable_path='./chromedriver.exe')
+
+twelve_ladder = 'https://12ft.io/'
+for idx, link in enumerate(links):
+    try:
+        driver.get(twelve_ladder + link.get('en_link'))
+        time.sleep(5)
+        iframe = driver.find_element(By.CSS_SELECTOR, "iframe")
+        driver.switch_to.frame(iframe)
+        html = driver.find_element_by_tag_name('html').get_attribute("innerHTML")
+        save_path = pathlib.Path.cwd() / 'en'
+        save_path.mkdir(0o755, parents=True, exist_ok=True)
+        with open(save_path / f"{link.get('article_id')}.html", 'w', encoding="utf-8") as file:
+            file.write(html)
+        soup = BeautifulSoup(html, 'html.parser')
+        if len(soup.select('.paywall')) > 0:
+            cursor.execute(f"UPDATE articles SET isScrped=0 WHERE articleId='{link.get('article_id')}'")
+        else:
+            cursor.execute(f"UPDATE articles SET isScrped=1 WHERE articleId='{link.get('article_id')}'")
+        conn.commit()
+        print(f"{link.get('title')} successfully downloaded")
+    except Exception as err:
+        print(str(err))
+        print(f"Something wrong with{link.get('title')} {link.get('article_id')} ")
+        continue
+
+    time.sleep(random.randrange(10))
+					</code></pre>
+        </section>
+
+        <section>
+          <pre><code data-trim data-line-numbers="1-3|6-7|6|25-34|39-44|46-50|55-56" class="python" >
+from bs4 import BeautifulSoup
+import sqlite3
+import pathlib
+
+
+zh_strings = []
+en_strings = []
+
+insert_query = '''
+INSERT INTO text
+(zh, en, articleId)
+VALUES (?, ?, ?);
+'''
+
+conn = sqlite3.connect('./article.db')
+cursor = conn.cursor()
+
+path = (pathlib.Path.cwd() / '2019').glob('**/*')
+files = [x for x in path if x.is_file()]
+cnt = 1
+for f in files:
+    try:
+        cnt += 1
+
+        with open(f, 'r', encoding='utf-8') as file:
+            cur = cursor.execute(f"SELECT id, articleId from articles WHERE zhTitle='{f.stem}';")
+            rows = cur.fetchall()
+            id = rows[0][0]
+            article_id = rows[0][1]
+            html = file.read()
+            zh_soup = BeautifulSoup(html, 'html.parser')
+            paragraphs = zh_soup.select('p')
+            for p in paragraphs:
+                if len(p.text) >= 10 and '●' not in p.text and '•' not in p.text and '編輯' not in p.text and '編按' not in p.text and '．' not in p.text and '原標題' not in p.text and 'Project Syndicate' not in p.text:
+                    zh_strings.append(p.text)
+
+
+
+        with open(pathlib.Path('en') / f'{article_id}.html', 'r', encoding='utf-8') as file:
+            html = file.read()
+            en_soup = BeautifulSoup(html, 'html.parser')
+            paragraphs = en_soup.find_all(lambda tag: tag.name == 'p' and 'data-line-id' in tag.attrs)
+            for p in paragraphs:
+                en_strings.append(p.text)
+
+        for zh, en in zip(zh_strings, en_strings):
+            print(zh)
+            print(en)
+            cursor.execute(insert_query, (zh, en, id))
+            conn.commit()
+    except Exception:
+        print(str(Exception))
+        continue
+
+    zh_strings = []
+    en_strings = []
+
+conn.close()
+					</code></pre>
+        </section>
+
+        <section>
+          <section>
+            <h3>Database</h3>
+            <ul>
+              <li>Normalization (正規化)</li>
+              <img src="./ER.png" />
+            </ul>
+          </section>
+          <section>
+            <pre><code class="json">
+  {
+    id: 1724,
+    zh: '人人都對利比亞國內的石油收益虎視眈眈，目前利比亞有兩大勢力相互拉鋸，分別是伊斯蘭派的全國團結政府（Government of National Accord）與反伊斯蘭陣營的軍閥哈夫塔（Khalifa Haftar）。',
+    en: 'Behind each of these warring camps are outside powers pursuing their own interests. While Turkey and Qatar have backed the
+GNA, Egypt, Russia, and the United Arab Emirates have been lending support to Haftar. International media coverage of the war has attributed this outside interference to competition – mainly between Turkey and Egypt – for oil and gas resources.',
+    articleId: 304,
+    article: {
+      id: 304,
+      zhTitle: '《大家論壇》利比亞視角：內戰無法劃下句點　埃及等鄰國將是下個戰場',
+      enTitle: 'What’s at Stake in Libya?',
+      articleId: '82115',
+      pubdate: '2020-03-02',
+      isScrped: 0,
+      sourceLink: 'https://www.project-syndicate.org/commentary/stakes-of-libya-civil-war-by-bernard-haykel-2020-02'
+    }
+  }
+            </code></pre>
+          </section>
+        </section>
+        <section>
+          <h3>Web app</h3>
+          <h2>
+            <a
+              href="https://final-project-app-hazel.vercel.app/"
+              target="_blank"
+              >Final Project</a
+            >
+          </h2>
+          <ul>
+            <li>Remix (A meta framework with React)</li>
+            <li>Material UI</li>
+            <li>Prisma (ORM)</li>
+            <li>Supabase (Database hosting)</li>
+          </ul>
+        </section>
+        <section>
+          <h3>What's next</h3>
+          <ul>
+            <li>sentence alignment</li>
+            <li>word alignment</li>
+            <li>🤔 favorite translation</li>
+          </ul>
+        </section>
+
+        <section>
+          <h1>😄</h1>
+          <h3>Thank you!</h3>
+        </section>
+      </div>
+    </div>
+
+    <script src="dist/reveal.js"></script>
+    <script src="plugin/notes/notes.js"></script>
+    <script src="plugin/markdown/markdown.js"></script>
+    <script src="plugin/highlight/highlight.js"></script>
+    <script>
+      // More info about initialization & config:
+      // - https://revealjs.com/initialization/
+      // - https://revealjs.com/config/
+      Reveal.initialize({
+        hash: true,
+
+        // Learn about plugins: https://revealjs.com/plugins/
+        plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
+      });
+    </script>
+  </body>
 </html>
